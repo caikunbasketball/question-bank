@@ -45,6 +45,18 @@ AI 供应商、模型、API Key 等**动态业务配置存储在数据库中**�
 
 同理，审核阈值、Prompt 模板等业务参数也在界面中管理，见 [系统参数](/admin/system-settings)。
 
+### 例外：一键写入三层模型的凭证
+
+`PADDLEOCR_AISTUDIO_TOKEN` / `SILICONFLOW_API_KEY` / `DEEPSEEK_API_KEY` 这三个变量**不参与运行时**，
+只被一键配置脚本 `backend/scripts/seed_llm_tiers.py` 读取，用来把供应商与密钥写入数据库：
+
+```bash
+cd backend && uv run python scripts/seed_llm_tiers.py
+```
+
+脚本执行完即可删除这三个变量——之后一切以数据库为准。三层方案的职责划分见
+[AI 供应商与模型](/admin/ai-config)。
+
 ::: tip 静态 vs 动态配置
 - **静态配置**（启动前确定）：`.env` / 环境变量，如密钥、数据库连接。
 - **动态配置**（运行时可改）：数据库中的 `system_setting` 等表，通过界面热更新。
