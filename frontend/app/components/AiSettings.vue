@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { Plus, Trash2, Save, RefreshCw, Pencil, Info, KeyRound, Cpu, Search, Image as ImageIcon, CheckCircle2, CircleDashed } from '@lucide/vue'
+import { Plus, Trash2, Save, RefreshCw, Pencil, Info, KeyRound, Cpu, Search, Image as ImageIcon, CheckCircle2, CircleDashed, ScanText } from '@lucide/vue'
 import type { AIProvider, AIModel, ActiveAIConfig, AIProviderCreate, AIProviderUpdate } from '~/types/ai-config'
 import {
   Card,
@@ -39,6 +39,8 @@ const { $api } = useNuxtApp()
 
 const PRESETS = [
   { name: 'DeepSeek', interface_type: 'openai', base_url: 'https://api.deepseek.com/v1' },
+  { name: '硅基流动 (SiliconFlow)', interface_type: 'openai', base_url: 'https://api.siliconflow.cn/v1' },
+  { name: '百度飞桨 AI Studio', interface_type: 'paddleocr', base_url: 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs' },
   { name: '智谱 AI (GLM)', interface_type: 'openai', base_url: 'https://open.bigmodel.cn/api/paas/v4' },
   { name: '千问 (Qwen)', interface_type: 'openai', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
   { name: 'Kimi', interface_type: 'openai', base_url: 'https://api.moonshot.cn/v1' },
@@ -51,9 +53,16 @@ const applyPreset = (preset: typeof PRESETS[0]) => {
   newProvider.value.base_url = preset.base_url
 }
 
+const INTERFACE_LABELS: Record<string, string> = {
+  openai: 'OpenAI 通用协议',
+  gemini: 'Gemini 协议',
+  paddleocr: 'PaddleOCR 文档解析',
+}
+const interfaceLabel = (t: string) => INTERFACE_LABELS[t] ?? t
+
 // State
 const providers = ref<AIProvider[]>([])
-const activeConfig = ref<ActiveAIConfig>({ text_model_id: null, vision_model_id: null, embedding_model_id: null })
+const activeConfig = ref<ActiveAIConfig>({ text_model_id: null, vision_model_id: null, ocr_model_id: null, embedding_model_id: null })
 const loading = ref(false)
 const savingConfig = ref(false)
 
@@ -240,6 +249,13 @@ const visionModels = computed(() => {
   return allModels.value.filter(m => m.is_vision_capable)
 })
 
+// 第一层：文档 OCR 主解析。只列出来自 paddleocr 协议供应商的模型。
+const ocrModels = computed(() => {
+  return providers.value
+    .filter(p => p.interface_type === 'paddleocr')
+    .flatMap(p => p.models.map(m => ({ ...m, providerName: p.name })))
+})
+
 const embeddingModels = computed(() => {
   return allModels.value.filter(m => m.is_embedding_model)
 })
@@ -260,6 +276,10 @@ watch(() => providers.value, (newProviders) => {
     }
     if (!activeConfig.value.vision_model_id && visionModels.value.length > 0) {
       activeConfig.value.vision_model_id = visionModels.value[0].id
+      changed = true
+    }
+    if (!activeConfig.value.ocr_model_id && ocrModels.value.length > 0) {
+      activeConfig.value.ocr_model_id = ocrModels.value[0].id
       changed = true
     }
     if (!activeConfig.value.embedding_model_id && embeddingModels.value.length > 0) {
@@ -352,6 +372,7 @@ onMounted(() => {
                   <SelectContent>
                     <SelectItem value="openai">OpenAI 兼容协议 (最常用)</SelectItem>
                     <SelectItem value="gemini">Google Gemini 协议</SelectItem>
+                    <SelectItem value="paddleocr">PaddleOCR 文档解析协议 (百度飞桨)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -381,7 +402,7 @@ onMounted(() => {
               <div>
                 <CardTitle class="text-lg">{{ provider.name }}</CardTitle>
                 <CardDescription class="mt-1 flex items-center gap-2">
-                  <Badge variant="secondary" class="font-normal">{{ provider.interface_type === 'openai' ? 'OpenAI 通用协议' : 'Gemini 协议' }}</Badge>
+                  <Badge variant="secondary" class="font-normal">{{ interfaceLabel(provider.interface_type) }}</Badge>
                   <span v-if="provider.is_active" class="flex h-2 w-2 rounded-full bg-green-500"></span>
                 </CardDescription>
               </div>
@@ -466,6 +487,32 @@ onMounted(() => {
         <AccordionContent class="pt-2 pb-6">
           <Separator class="mb-6" />
           <div class="grid gap-8 md:grid-cols-2">
+            <!-- Layer 1: Document OCR -->
+            <div class="space-y-3">
+              <div class="flex gap-3">
+                <div class="mt-1 hidden sm:block">
+                  <div class="p-2 bg-secondary rounded text-secondary-foreground"><ScanText class="w-4 h-4"/></div>
+                </div>
+                <div class="flex-1 space-y-1">
+                  <Label class="text-sm font-semibold">① 文档 OCR 主解析 📄</Label>
+                  <p class="text-[13px] text-muted-foreground">图片与 PDF 的第一道关，负责把版面转成 Markdown（含公式、表格）。需选择 PaddleOCR 协议的模型。</p>
+                  <Select v-model="activeConfig.ocr_model_id" :disabled="loading">
+                    <SelectTrigger class="mt-2">
+                      <SelectValue placeholder="请选择主 OCR 模型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="model in ocrModels" :key="model.id" :value="model.id">
+                        {{ model.providerName }} / {{ model.name }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p v-if="ocrModels.length === 0" class="text-xs text-amber-600">
+                    尚未接入 PaddleOCR 供应商，一级解析将跳过、直接使用下方的视觉模型兜底。
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <!-- Text Model -->
             <div class="space-y-3">
               <div class="flex gap-3">
@@ -473,8 +520,8 @@ onMounted(() => {
                   <div class="p-2 bg-secondary rounded text-secondary-foreground"><Info class="w-4 h-4"/></div>
                 </div>
                 <div class="flex-1 space-y-1">
-                  <Label class="text-sm font-semibold">基础问答与文档分析 🧠</Label>
-                  <p class="text-[13px] text-muted-foreground">处理文本阅读、题目提取和日常对话的最佳大模型。</p>
+                  <Label class="text-sm font-semibold">③ 题目结构化与问答 🧠</Label>
+                  <p class="text-[13px] text-muted-foreground">第三层：把解析出的 Markdown 变成结构化题目，并做语义理解与分类归属。</p>
                   <Select v-model="activeConfig.text_model_id" :disabled="loading">
                     <SelectTrigger class="mt-2">
                       <SelectValue placeholder="请选择主模型" />
@@ -496,8 +543,8 @@ onMounted(() => {
                   <div class="p-2 bg-secondary rounded text-secondary-foreground"><ImageIcon class="w-4 h-4"/></div>
                 </div>
                 <div class="flex-1 space-y-1">
-                  <Label class="text-sm font-semibold">图片识别与解析 👁️</Label>
-                  <p class="text-[13px] text-muted-foreground">负责看懂包含图表、公式的截图。需选择支持视觉能力(Vision)的模型。</p>
+                  <Label class="text-sm font-semibold">② 视觉兜底转写 👁️</Label>
+                  <p class="text-[13px] text-muted-foreground">第二层：一级 OCR 失败或漏页时补位转写。需选择支持视觉能力(Vision)的模型。</p>
                   <Select v-model="activeConfig.vision_model_id" :disabled="loading">
                     <SelectTrigger class="mt-2">
                       <SelectValue placeholder="请选择识图模型" />
@@ -567,6 +614,7 @@ onMounted(() => {
               <SelectContent>
                 <SelectItem value="openai">OpenAI Compatible</SelectItem>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="paddleocr">PaddleOCR (Baidu AI Studio)</SelectItem>
               </SelectContent>
             </Select>
           </div>
