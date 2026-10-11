@@ -25,3 +25,7 @@ logs/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/node_modules/
+
+# Local maintenance scripts (machine-specific, do not commit)
+_maintenance/
+启动题库系统.bat
