@@ -29,3 +29,6 @@ docs/node_modules/
 # Local maintenance scripts (machine-specific, do not commit)
 _maintenance/
 启动题库系统.bat
+
+# WorkBuddy session data (memory / workspace metadata, machine-specific)
+.workbuddy/
