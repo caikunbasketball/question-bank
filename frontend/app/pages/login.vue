@@ -4,6 +4,8 @@ import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
 import { Loader2 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 
 definePageMeta({
   layout: 'empty'
@@ -12,12 +14,29 @@ definePageMeta({
 const { login } = useAuth()
 const router = useRouter()
 const { $api } = useNuxtApp()
+const remembered = useRememberedLogin()
 
 const isLoading = ref(false)
 const registrationEnabled = ref(false)
+const rememberMe = ref(false)
 
-// 若系统尚未完成首次初始化，引导至安装向导
+const formSchema = toTypedSchema(z.object({
+  username: z.string().min(1, '请输入用户名'),
+  password: z.string().min(1, '请输入密码'),
+}))
+
+const form = useForm({
+  validationSchema: formSchema,
+})
+
+// 若系统尚未完成首次初始化，引导至安装向导；同时回填上次记住的账号密码
 onMounted(async () => {
+  const saved = remembered.load()
+  if (saved) {
+    form.setValues({ username: saved.username, password: saved.password })
+    rememberMe.value = true
+  }
+
   try {
     const res = await $api<{ configured: boolean }>('/setup/status')
     if (!res.configured) {
@@ -34,19 +53,18 @@ onMounted(async () => {
   }
 })
 
-const formSchema = toTypedSchema(z.object({
-  username: z.string().min(1, '请输入用户名'),
-  password: z.string().min(1, '请输入密码'),
-}))
-
-const form = useForm({
-  validationSchema: formSchema,
-})
-
 const onSubmit = form.handleSubmit(async (values) => {
   isLoading.value = true
   try {
     await login({ username: values.username, password: values.password })
+
+    // 登录成功后再落盘，避免把打错的密码记下来
+    if (rememberMe.value) {
+      remembered.save({ username: values.username, password: values.password })
+    } else {
+      remembered.clear()
+    }
+
     toast.success('登录成功')
     router.push('/')
   } catch (error: any) {
@@ -61,6 +79,11 @@ const onSubmit = form.handleSubmit(async (values) => {
   } finally {
     isLoading.value = false
   }
+})
+
+// 取消勾选时立即清除，不必等到下次登录成功
+watch(rememberMe, (on) => {
+  if (!on) remembered.clear()
 })
 </script>
 
@@ -83,22 +106,49 @@ const onSubmit = form.handleSubmit(async (values) => {
               <FormItem>
                 <FormLabel>用户名</FormLabel>
                 <FormControl>
-                  <Input type="text" placeholder="admin" v-bind="componentField" />
+                  <Input
+                    type="text"
+                    placeholder="admin"
+                    autocomplete="username"
+                    v-bind="componentField"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             </FormField>
-            
+
             <FormField v-slot="{ componentField }" name="password">
               <FormItem>
                 <FormLabel>密码</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="******" v-bind="componentField" />
+                  <Input
+                    type="password"
+                    placeholder="******"
+                    autocomplete="current-password"
+                    v-bind="componentField"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             </FormField>
-            
+
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  id="remember-me"
+                  :model-value="rememberMe"
+                  @update:model-value="(v) => (rememberMe = v === true)"
+                />
+                <Label for="remember-me" class="cursor-pointer text-sm font-normal">
+                  记住账号密码
+                </Label>
+              </div>
+              <p class="pl-6 text-xs text-muted-foreground">
+                在此浏览器中自动填充。密码以本地混淆方式保存，<strong>非加密</strong>，
+                请勿在公用电脑上勾选。
+              </p>
+            </div>
+
             <Button type="submit" :disabled="isLoading" class="w-full">
               <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
               登录
