@@ -1,5 +1,10 @@
+from typing import Literal, Optional, List
+
 from pydantic import BaseModel, field_validator
-from typing import Optional, List
+
+# 支持的供应商协议。``paddleocr`` 是文档解析专用通道(百度飞桨 AI Studio),
+# 不能用作文本/视觉对话模型——槽位校验在 services.ai_config_service 里兜。
+InterfaceType = Literal["openai", "gemini", "paddleocr"]
 
 class AIModelBase(BaseModel):
     name: str
@@ -28,7 +33,7 @@ class AIModel(AIModelBase):
 
 class AIProviderBase(BaseModel):
     name: str
-    interface_type: str
+    interface_type: InterfaceType
     base_url: Optional[str] = None
     is_active: bool = True
 
@@ -38,7 +43,7 @@ class AIProviderCreate(AIProviderBase):
 
 class AIProviderUpdate(BaseModel):
     name: Optional[str] = None
-    interface_type: Optional[str] = None
+    interface_type: Optional[InterfaceType] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
     is_active: Optional[bool] = None

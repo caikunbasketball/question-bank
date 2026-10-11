@@ -896,6 +896,17 @@ class OpenAIProvider(AIProvider):
             return []
 
 def get_ai_provider(provider_name: str) -> AIProvider:
-    if provider_name.lower() == "openai":
+    """按 provider 的 interface_type 取对话/抽取实现。
+
+    注意 ``paddleocr`` 不是对话协议,它是三层方案里第一层的**文档解析**通道,
+    由 ``app.services.ocr`` 单独承接。误把它配到文本/视觉槽位时,这里直接报错,
+    而不是静默回退到 Gemini(那会产出一堆莫名其妙的 400)。
+    """
+    name = (provider_name or "").lower()
+    if name == "openai":
         return OpenAIProvider()
+    if name == "paddleocr":
+        raise ValueError(
+            "PaddleOCR 供应商只能用于「文档 OCR 主解析」槽位，不能作为文本/视觉对话模型使用"
+        )
     return GeminiProvider()

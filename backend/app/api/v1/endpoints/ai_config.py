@@ -7,6 +7,7 @@ from app.crud.crud_system_setting import system_setting
 from app.schemas.ai_config import AIProvider as AIProviderSchema, AIProviderCreate, AIProviderUpdate, AIModel as AIModelSchema, AIModelCreate
 from app.services.ai_config_service import (
     EMBEDDING_MODEL_KEY,
+    OCR_MODEL_KEY,
     delete_model,
     delete_provider,
     validate_active_model,
@@ -106,6 +107,7 @@ async def get_active_config(
 ) -> Any:
     text_model_setting = await system_setting.get_by_key(db, "AI_TEXT_MODEL_ID")
     vision_model_setting = await system_setting.get_by_key(db, "AI_VISION_MODEL_ID")
+    ocr_model_setting = await system_setting.get_by_key(db, "AI_OCR_MODEL_ID")
     embedding_model_setting = await system_setting.get_by_key(db, "AI_EMBEDDING_MODEL_ID")
     
     def safe_int(val: str | None) -> int | None:
@@ -119,6 +121,7 @@ async def get_active_config(
     return {
         "text_model_id": safe_int(text_model_setting.value) if text_model_setting else None,
         "vision_model_id": safe_int(vision_model_setting.value) if vision_model_setting else None,
+        "ocr_model_id": safe_int(ocr_model_setting.value) if ocr_model_setting else None,
         "embedding_model_id": safe_int(embedding_model_setting.value) if embedding_model_setting else None
     }
 
@@ -132,6 +135,7 @@ async def update_active_config(
     fields = {
         "text_model_id": ("AI_TEXT_MODEL_ID", "Active AI Text Model ID"),
         "vision_model_id": ("AI_VISION_MODEL_ID", "Active AI Vision Model ID"),
+        "ocr_model_id": (OCR_MODEL_KEY, "Active AI Document OCR Model ID"),
         "embedding_model_id": (EMBEDDING_MODEL_KEY, "Active AI Embedding Model ID"),
     }
     embedding_changed = False

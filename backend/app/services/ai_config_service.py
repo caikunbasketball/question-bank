@@ -13,9 +13,18 @@ from app.models.system_setting import SystemSetting
 ACTIVE_MODEL_KEYS: Dict[str, str] = {
     "AI_TEXT_MODEL_ID": "文本模型",
     "AI_VISION_MODEL_ID": "视觉模型",
+    "AI_OCR_MODEL_ID": "文档 OCR 模型",
     "AI_EMBEDDING_MODEL_ID": "向量模型",
 }
 EMBEDDING_MODEL_KEY = "AI_EMBEDDING_MODEL_ID"
+OCR_MODEL_KEY = "AI_OCR_MODEL_ID"
+VISION_MODEL_KEY = "AI_VISION_MODEL_ID"
+TEXT_MODEL_KEY = "AI_TEXT_MODEL_ID"
+
+# 各槽位对 provider.interface_type 的要求。未列出的槽位不限协议。
+_REQUIRED_INTERFACE: Dict[str, str] = {
+    OCR_MODEL_KEY: "paddleocr",
+}
 
 
 def _setting_model_id(setting: SystemSetting) -> int | None:
@@ -44,6 +53,17 @@ async def validate_active_model(
         raise Invalid(f"{ACTIVE_MODEL_KEYS[key]}不存在")
     if key == EMBEDDING_MODEL_KEY and not model.is_embedding_model:
         raise Invalid("所选模型不是向量模型")
+
+    required = _REQUIRED_INTERFACE.get(key)
+    if required:
+        provider = await db.scalar(
+            select(AIProvider).where(AIProvider.id == model.provider_id)
+        )
+        if provider is None or provider.interface_type != required:
+            raise Invalid(
+                f"{ACTIVE_MODEL_KEYS[key]}必须来自接口类型为「{required}」的供应商"
+                f"(如百度飞桨 AI Studio 的 PaddleOCR-VL)"
+            )
 
 
 async def _locked_active_settings(db: AsyncSession) -> List[SystemSetting]:
