@@ -26,8 +26,13 @@ class CanonicalDoc:
     task_id: str
     markdown: str = ""                       # 文本源内容;图像源为空
     filename: Optional[str] = None           # 传给 AI 抽取的文件名上下文
-    image_data: Optional[bytes] = None       # 视觉抽取用
+    image_data: Optional[bytes] = None       # 视觉抽取用(单图源)
     image_url: Optional[str] = None          # 图像源的公开访问 URL
+    # 逐页栅格图(PDF / 多页文档用)。三层方案里第二层视觉兜底与"页数是否对得上"
+    # 的校验都靠它;单图源也会填成单元素列表,保证下游逻辑只有一条。
+    page_images: Optional[list[bytes]] = None
+    # 原始文件字节(整份 PDF / 单张图),直接交给第一层 PaddleOCR-VL。
+    document: Optional[bytes] = None
 
 
 def _ensure_task_id(task_id: Optional[str]) -> str:
@@ -273,4 +278,66 @@ class ImageIngestor:
             task_id=task_id,
             image_data=image_data,
             image_url=f"/static/media/{task_id}/{image_filename}",
+            page_images=[image_data],
+            document=image_data,
+        )
+
+
+# PDF 栅格化分辨率。200dpi 是"公式/小字还能看清"与"单页体积可控"的平衡点;
+# 再高会让第二层视觉兜底的 token 消耗陡增。
+PDF_RASTER_DPI = 200
+# 单份 PDF 的页数上限,防止误传几百页文件把 OCR 配额打光。
+PDF_MAX_PAGES = 200
+
+
+class PdfIngestor:
+    """PDF 摄取:一份 PDF → 逐页 PNG + 原始字节。
+
+    不做文字层抽取。理由:题库素材多是扫描件/拍照转的 PDF,文字层要么没有、
+    要么是乱掉的 OCR 残留;统一走"栅格化 → OCR"这条链,行为可预期,而且
+    逐页图还能直接喂给第二层视觉兜底。
+    """
+
+    async def ingest(self, file_path: Path, *, task_id: Optional[str] = None) -> CanonicalDoc:
+        task_id = _ensure_task_id(task_id)
+
+        media_dir = settings.MEDIA_DIR / task_id
+        media_dir.mkdir(parents=True, exist_ok=True)
+
+        raw = await asyncio.to_thread(file_path.read_bytes)
+
+        def rasterize() -> list[bytes]:
+            try:
+                import fitz  # PyMuPDF
+            except ImportError as exc:  # pragma: no cover - 依赖缺失属环境问题
+                raise RuntimeError(
+                    "缺少 PyMuPDF 依赖,PDF 导入不可用。请在后端目录执行 uv sync 后重试"
+                ) from exc
+
+            pages: list[bytes] = []
+            with fitz.open(stream=raw, filetype="pdf") as doc:
+                if doc.page_count == 0:
+                    raise ValueError("PDF 不含任何页面")
+                if doc.page_count > PDF_MAX_PAGES:
+                    raise ValueError(f"PDF 页数过多({doc.page_count} 页),上限 {PDF_MAX_PAGES} 页")
+                for page in doc:
+                    pix = page.get_pixmap(dpi=PDF_RASTER_DPI)
+                    pages.append(pix.tobytes("png"))
+            return pages
+
+        pages = await asyncio.to_thread(rasterize)
+
+        # 逐页图落盘:复核页要展示原图,第二层兜底也直接复用这批文件。
+        def save_pages() -> None:
+            for idx, page_bytes in enumerate(pages):
+                (media_dir / f"page_{idx + 1:03d}.png").write_bytes(page_bytes)
+
+        await asyncio.to_thread(save_pages)
+
+        return CanonicalDoc(
+            task_id=task_id,
+            filename=file_path.name,
+            page_images=pages,
+            document=raw,
+            image_url=f"/static/media/{task_id}/page_001.png",
         )

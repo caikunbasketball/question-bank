@@ -209,7 +209,7 @@ async def upload_image_recognition(
     mode: str = "extract",
     subject_id: int = None,
 ):
-    """Upload and process an image file to extract questions using AI vision."""
+    """Upload and process an image file: OCR chain (PaddleOCR-VL → vision) then LLM extraction."""
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Only image files are supported")
     
@@ -221,6 +221,44 @@ async def upload_image_recognition(
         logger.exception(
             "Failed to process image: filename=%s mode=%s subject_id=%s",
             file.filename,
+            mode,
+            subject_id,
+        )
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+@router.post("/pdf")
+async def upload_pdf(
+    db: deps.SessionDep,
+    file: UploadFile = File(...),
+    mode: str = "extract",
+    subject_id: int = None,
+):
+    """Upload and process a PDF: rasterize pages, run the OCR chain, then LLM extraction."""
+    filename = file.filename or ""
+    is_pdf = file.content_type == "application/pdf" or filename.lower().endswith(".pdf")
+    if not is_pdf:
+        raise HTTPException(status_code=400, detail="Only .pdf files are supported")
+
+    upload_session_id = str(uuid.uuid4())
+    upload_dir = settings.UPLOAD_DIR / upload_session_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / (filename or "upload.pdf")
+
+    content = await file.read()
+    await asyncio.to_thread(file_path.write_bytes, content)
+
+    try:
+        result = await doc_processor.process_pdf(file_path, db=db, mode=mode, subject_id=subject_id)
+        _as_review(result, subject_id)
+        result["file_path"] = str(file_path)
+        await _attach_duplicate_hint(result, db, content)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception(
+            "Failed to process PDF: filename=%s mode=%s subject_id=%s",
+            filename,
             mode,
             subject_id,
         )

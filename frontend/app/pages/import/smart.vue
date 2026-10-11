@@ -253,6 +253,8 @@ const handleAutoUpload = () => {
     // Auto-detect based on file type or pasted image
     if (pastedImage.value || (file.value && file.value.type.startsWith('image/'))) {
         handleUploadImage();
+    } else if (file.value && file.value.name.toLowerCase().endsWith('.pdf')) {
+        handleUploadPdf();
     } else if (file.value && file.value.name.endsWith('.zip')) {
         handleUploadMarkdownArchive();
     } else if (file.value && file.value.name.endsWith('.md')) {
@@ -394,6 +396,29 @@ const handleUploadImage = async () => {
 
     try {
         const data = await $api<any>(`/upload/image-recognition?mode=${importMode.value}&subject_id=${globalSettings.value.subject_id}`, {
+            method: 'POST',
+            body: formData,
+        })
+
+        acceptExtraction(data)
+    } catch (e: any) {
+        error.value = e.message
+    } finally {
+        isUploading.value = false
+    }
+}
+
+// PDF：后端栅格化逐页图 → 三层链（PaddleOCR-VL 主解析 / Qwen3-VL 兜底 / 文本模型结构化）
+const handleUploadPdf = async () => {
+    if (!file.value) return
+    isUploading.value = true
+    error.value = null
+
+    const formData = new FormData()
+    formData.append('file', file.value)
+
+    try {
+        const data = await $api<any>(`/upload/pdf?mode=${importMode.value}&subject_id=${globalSettings.value.subject_id}`, {
             method: 'POST',
             body: formData,
         })
@@ -632,7 +657,7 @@ const reset = () => {
                                 type="file"
                                 id="mega-file-upload"
                                 class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                accept=".docx,.md,.zip,image/*"
+                                accept=".docx,.md,.zip,.pdf,image/*"
                                 @change="handleFileChange"
                                 :disabled="isUploading"
                                 title="点击上传文件"
@@ -649,6 +674,7 @@ const reset = () => {
                                 </div>
                                 <div class="flex items-center justify-center gap-4 text-xs text-muted-foreground mt-4">
                                     <span class="flex items-center gap-1"><FileText class="h-3 w-3"/> Word (.docx)</span>
+                                    <span class="flex items-center gap-1"><BookOpen class="h-3 w-3"/> PDF（逐页 OCR）</span>
                                     <span class="flex items-center gap-1"><FileCode class="h-3 w-3"/> Markdown (.md / .zip)</span>
                                     <span class="flex items-center gap-1"><ImageIcon class="h-3 w-3"/> 图片提取</span>
                                 </div>
@@ -664,6 +690,7 @@ const reset = () => {
                                     <template v-else-if="file">
                                          <div class="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
                                             <ImageIcon v-if="file.type.startsWith('image/')" class="h-8 w-8 text-primary" />
+                                            <BookOpen v-else-if="file.name.toLowerCase().endsWith('.pdf')" class="h-8 w-8 text-primary" />
                                             <FileText v-else-if="file.name.endsWith('.docx')" class="h-8 w-8 text-primary" />
                                             <FileCode v-else class="h-8 w-8 text-primary" />
                                          </div>
