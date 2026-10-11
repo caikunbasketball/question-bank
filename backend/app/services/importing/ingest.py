@@ -307,15 +307,16 @@ class PdfIngestor:
         raw = await asyncio.to_thread(file_path.read_bytes)
 
         def rasterize() -> list[bytes]:
+            # 用正式包名 pymupdf(旧别名 fitz 已标记废弃,将来会移除)。
             try:
-                import fitz  # PyMuPDF
+                import pymupdf
             except ImportError as exc:  # pragma: no cover - 依赖缺失属环境问题
                 raise RuntimeError(
                     "缺少 PyMuPDF 依赖,PDF 导入不可用。请在后端目录执行 uv sync 后重试"
                 ) from exc
 
             pages: list[bytes] = []
-            with fitz.open(stream=raw, filetype="pdf") as doc:
+            with pymupdf.open(stream=raw, filetype="pdf") as doc:
                 if doc.page_count == 0:
                     raise ValueError("PDF 不含任何页面")
                 if doc.page_count > PDF_MAX_PAGES:

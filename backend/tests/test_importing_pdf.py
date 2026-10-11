@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.services.doc_processor import _persist_assets
 from app.services.importing.ingest import PdfIngestor
 
-fitz = pytest.importorskip("fitz", reason="需要 PyMuPDF")
+fitz = pytest.importorskip("pymupdf", reason="需要 PyMuPDF")
 
 
 def _make_pdf(tmp_path, pages: int = 2):
