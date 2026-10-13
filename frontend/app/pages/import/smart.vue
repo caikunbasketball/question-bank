@@ -308,6 +308,19 @@ watch(saveAsComposition, (on) => {
 })
 
 
+/**
+ * 后端业务错误在响应体的 `detail` 里(如"PDF 页数过多…"),而 ofetch 的 `e.message`
+ * 只有状态行("400 Bad Request")。不取 detail 的话,用户永远看不到真正的原因。
+ */
+const apiErrorMessage = (e: any): string => {
+    const detail = e?.data?.detail ?? e?.response?._data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    if (Array.isArray(detail) && detail.length) {
+        return detail.map((d: any) => d?.msg ?? String(d)).join('；')
+    }
+    return e?.message || '请求失败'
+}
+
 const handleUploadDocx = async () => {
     if (!file.value) return
     isUploading.value = true
@@ -324,7 +337,7 @@ const handleUploadDocx = async () => {
 
         acceptExtraction(data)
     } catch (e: any) {
-        error.value = e.message
+        error.value = apiErrorMessage(e)
     } finally {
         isUploading.value = false
     }
@@ -358,7 +371,7 @@ const handleUploadMarkdown = async (isFile: boolean = false) => {
 
         acceptExtraction(data)
     } catch (e: any) {
-        error.value = e.message
+        error.value = apiErrorMessage(e)
     } finally {
         isUploading.value = false
     }
@@ -380,7 +393,7 @@ const handleUploadMarkdownArchive = async () => {
 
         acceptExtraction(data)
     } catch (e: any) {
-        error.value = e.message
+        error.value = apiErrorMessage(e)
     } finally {
         isUploading.value = false
     }
@@ -402,7 +415,7 @@ const handleUploadImage = async () => {
 
         acceptExtraction(data)
     } catch (e: any) {
-        error.value = e.message
+        error.value = apiErrorMessage(e)
     } finally {
         isUploading.value = false
     }
@@ -425,7 +438,7 @@ const handleUploadPdf = async () => {
 
         acceptExtraction(data)
     } catch (e: any) {
-        error.value = e.message
+        error.value = apiErrorMessage(e)
     } finally {
         isUploading.value = false
     }

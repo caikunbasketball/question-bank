@@ -321,7 +321,12 @@ class PdfIngestor:
                 if doc.page_count == 0:
                     raise ValueError("PDF 不含任何页面")
                 if doc.page_count > PDF_MAX_PAGES:
-                    raise ValueError(f"PDF 页数过多({doc.page_count} 页),上限 {PDF_MAX_PAGES} 页")
+                    # 报错要能指路:整本教材(几百页)是常态,直接说"超限"用户只会
+                    # 以为系统坏了。指向按章节导入,那里不受单次页数上限约束。
+                    raise ValueError(
+                        f"PDF 页数过多({doc.page_count} 页),单次导入上限 {PDF_MAX_PAGES} 页。"
+                        f"整本教材请改用「PDF 章节导入」,按目录拆分后逐章导入。"
+                    )
                 for page in doc:
                     pix = page.get_pixmap(dpi=PDF_RASTER_DPI)
                     pages.append(pix.tobytes("png"))
