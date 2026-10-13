@@ -171,7 +171,7 @@ class DocProcessor:
             db=db,
             page_images=doc.page_images,
         )
-        markdown = _persist_assets(result.markdown, result.assets, doc.task_id)
+        markdown = persist_ocr_assets(result.markdown, result.assets, doc.task_id)
         meta = {
             "source": result.source,
             "page_count": result.page_count,
@@ -191,7 +191,7 @@ class DocProcessor:
 _ASSET_MARKDOWN_RE = re.compile(r"(!\[[^\]]*\]\()([^)\s]+)((?:\s+\"[^\"]*\")?\))")
 
 
-def _persist_assets(markdown: str, assets: dict[str, bytes], task_id: str) -> str:
+def persist_ocr_assets(markdown: str, assets: dict[str, bytes], task_id: str) -> str:
     """把 OCR 返回的图片字节落到 media 目录,并把 markdown 里的引用改写成公开 URL。
 
     PaddleOCR 的图片是远端临时链接,必须落到本地,否则题库里的题图迟早变死链。
@@ -223,5 +223,8 @@ def _persist_assets(markdown: str, assets: dict[str, bytes], task_id: str) -> st
 
     return _ASSET_MARKDOWN_RE.sub(_sub, markdown)
 
+
+# 旧名保留:既有代码与测试按 `_persist_assets` 引用。
+_persist_assets = persist_ocr_assets
 
 doc_processor = DocProcessor()

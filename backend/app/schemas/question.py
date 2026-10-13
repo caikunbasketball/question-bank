@@ -147,6 +147,12 @@ class QuestionCreate(QuestionBase):
     ai_suggested_tags: Optional[Dict[str, List[str]]] = None
     children: Optional[List['QuestionCreate']] = None
     temp_id: Optional[str] = None
+    # PDF 章节导入的归属。三个都可选:手工建题与既有导入路径不受影响。
+    book_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    section_id: Optional[int] = None
+    # AI 分类的待审核痕迹(dict 或 JSON 字符串)。为 None 表示分类可信。
+    classification_review: Optional[Any] = None
 
     # parent_id 允许创建/导入期传入字符串 UUID(占位),CRUD 再落地为真实 id。
     parent_id: Optional[Any] = None

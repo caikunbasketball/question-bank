@@ -126,6 +126,11 @@ class QuestionImporter:
                     tag_ids=raw.get("tag_ids") or [],
                     ai_suggested_tags=_resolve_ai_tags(raw),
                     source=source,
+                    # 章节归属:逐题字段优先,缺省回落到批次默认值(章节批量导入会填)。
+                    book_id=raw.get("book_id", defaults.book_id),
+                    chapter_id=raw.get("chapter_id", defaults.chapter_id),
+                    section_id=raw.get("section_id", defaults.section_id),
+                    classification_review=raw.get("classification_review"),
                 )
                 question = await question_service.create_question(
                     db=db,

@@ -92,6 +92,31 @@ class AIProvider(ABC):
             results[str(item['id'])] = verified
         return results
 
+    async def classify_json(self, prompt: str, config: Dict[str, str] = None) -> Optional[dict]:
+        """发一段"只输出 JSON"的 prompt,返回解析后的 dict;失败返回 None。
+
+        与 `extract_questions` 的区别:这里不套抽题 prompt 模板,也不做抽题 schema
+        校验——返回什么全交给调用方按自己的候选集比对。
+
+        默认实现返回 None 而不是抛错:分类是导入链路上的可降级环节,provider 没实现
+        时应当让题目全部落到"待审核",而不是让整批导入失败。
+        """
+        logger.warning("%s 未实现 classify_json,分类结果将全部标记待审核", type(self).__name__)
+        return None
+
+
+def _strip_code_fence(text: str) -> str:
+    """去掉模型偶尔包上的 ```json 代码围栏。"""
+    text = (text or "").strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+
 class GeminiProvider(AIProvider):
     async def chat_stream(
         self, 
@@ -491,6 +516,41 @@ class GeminiProvider(AIProvider):
             return {}
         return {}
 
+    async def classify_json(self, prompt: str, config: Dict[str, str] = None) -> Optional[dict]:
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError:
+            logger.error("google-genai package not installed")
+            return None
+
+        config = config or {}
+        api_key = config.get("API_KEY")
+        if not api_key:
+            logger.warning("API_KEY not configured for Gemini classification")
+            return None
+
+        client_kwargs = {"api_key": api_key}
+        base_url = config.get("BASE_URL")
+        if base_url:
+            client_kwargs["http_options"] = {"base_url": base_url}
+
+        client = genai.Client(**client_kwargs)
+        try:
+            def generate_content():
+                return client.models.generate_content(
+                    model=config.get("MODEL_NAME", "gemini-2.0-flash-exp"),
+                    contents=prompt,
+                    config=types.GenerateContentConfig(response_mime_type="application/json"),
+                )
+
+            response = await asyncio.to_thread(generate_content)
+            if response.text:
+                return json.loads(_strip_code_fence(response.text))
+        except Exception as e:
+            logger.error(f"Gemini Classify error: {e}")
+        return None
+
     async def get_embeddings(self, texts: List[str], config: Dict[str, str] = None) -> List[List[float]]:
         try:
             from google import genai
@@ -860,6 +920,44 @@ class OpenAIProvider(AIProvider):
         except Exception as e:
             logger.error(f"OpenAI Batch Rerank error: {e}")
             return {}
+
+    async def classify_json(self, prompt: str, config: Dict[str, str] = None) -> Optional[dict]:
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            logger.error("openai package not installed")
+            return None
+
+        try:
+            config = config or {}
+            api_key = config.get("API_KEY")
+            if not api_key:
+                logger.warning("API_KEY not configured for classification")
+                return None
+
+            client = AsyncOpenAI(api_key=api_key, base_url=config.get("BASE_URL"))
+            # 分类是判定任务,要的是稳定而非花样:temperature 固定 0。
+            kwargs = {
+                "model": config.get("MODEL_NAME", "gpt-4o"),
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+            }
+            # 部分兼容端点不支持 response_format,失败时降级为不带该参数重试一次。
+            try:
+                response = await client.chat.completions.create(
+                    response_format={"type": "json_object"}, **kwargs
+                )
+            except Exception as fmt_err:  # noqa: BLE001
+                logger.warning("分类请求不支持 response_format,降级重试: %s", fmt_err)
+                response = await client.chat.completions.create(**kwargs)
+
+            content = response.choices[0].message.content
+            if not content:
+                return None
+            return json.loads(_strip_code_fence(content))
+        except Exception as e:
+            logger.error(f"Classify error: {e}")
+            return None
 
     async def get_embeddings(self, texts: List[str], config: Dict[str, str] = None) -> List[List[float]]:
         try:

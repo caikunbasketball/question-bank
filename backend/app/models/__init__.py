@@ -5,8 +5,15 @@ from .subject_member import SubjectMember
 from .knowledge_point import KnowledgePoint
 from .tag import Tag
 from .tag_category import TagCategory
+from .book import SourceBook, BookChapter, BookSection
 from .question import Question
 from .import_task import ImportTask
+from .pdf_chapter_import import (
+    PdfChapterImportTask,
+    PdfChapterImportItem,
+    ChapterImportTaskStatus,
+    ChapterImportItemStatus,
+)
 from .activity_log import ActivityLog
 from .system_setting import SystemSetting
 from .subject_prompt import SubjectPrompt

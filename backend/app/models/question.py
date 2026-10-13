@@ -88,6 +88,17 @@ class Question(Base):
     import_task_id = Column(Integer, ForeignKey('import_tasks.id'), nullable=True)
     parent_id = Column(Integer, ForeignKey('questions.id'), nullable=True, index=True)
     source = Column(String(255), nullable=True) # 来源 (例如导入的文件名)
+
+    # 书籍 / 章节 / 小节归属(PDF 按章节导入)。三个外键一次写全,便于按书统计、
+    # 按章筛选题,不必 join 回父级。非空不代表必须有值——手工建题可以全空。
+    book_id = Column(Integer, ForeignKey('source_books.id'), nullable=True, index=True)
+    chapter_id = Column(Integer, ForeignKey('book_chapters.id'), nullable=True, index=True)
+    section_id = Column(Integer, ForeignKey('book_sections.id'), nullable=True, index=True)
+
+    # AI 分类没把握时留下的痕迹,JSON:{"confidence":0.3,"reason":"..."}。
+    # 只由章节导入写入,不进 pydantic 读 schema——它是给审核人看的排障信息,
+    # 不是题目的发布内容。为NULL即表示"分类可信,无需复核"。
+    classification_review = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

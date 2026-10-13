@@ -39,6 +39,10 @@ class ImportDefaults:
     subject_id: Optional[int] = None
     status: QuestionStatus = QuestionStatus.PENDING
     source: Optional[str] = None
+    # PDF 章节导入:整批共享的书籍 / 章节 / 小节归属。逐题可覆盖。
+    book_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    section_id: Optional[int] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -48,6 +52,13 @@ class ImportDefaults:
 # 都是系统拥有的字段。翻译成 AST 由 composition_authoring.build_nodes 负责。
 # outline 里的 question_ref.temp_id 指向 questions[].id(同一次抽取内唯一)。
 # --------------------------------------------------------------------------- #
+
+# PDF 栅格化分辨率。200dpi 是"公式/小字还能看清"与"单页体积可控"的平衡点;
+# 再高会让第二层视觉兜底的 token 消耗陡增。
+#
+# 放在本模块而不是 ingest.py:ingest 顶部 import pypandoc,而章节拆分 / 目录识别
+# 只需要这一个常量,不该为了它把整条 pandoc 依赖链拉进来。
+PDF_RASTER_DPI = 200
 
 OUTLINE_HEADING = "heading"
 OUTLINE_RICH_TEXT = "rich_text"

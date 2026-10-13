@@ -20,6 +20,10 @@ import pypandoc
 
 from app.core.config import settings
 
+# PDF 栅格化分辨率定义在 .contracts(那里没有 pypandoc 依赖);此处保留同名
+# 导出,既有 `from .ingest import PDF_RASTER_DPI` 不受影响。
+from .contracts import PDF_RASTER_DPI  # noqa: F401
+
 
 @dataclass
 class CanonicalDoc:
@@ -283,9 +287,6 @@ class ImageIngestor:
         )
 
 
-# PDF 栅格化分辨率。200dpi 是"公式/小字还能看清"与"单页体积可控"的平衡点;
-# 再高会让第二层视觉兜底的 token 消耗陡增。
-PDF_RASTER_DPI = 200
 # 单份 PDF 的页数上限,防止误传几百页文件把 OCR 配额打光。
 PDF_MAX_PAGES = 200
 
